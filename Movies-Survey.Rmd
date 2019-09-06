@@ -1,0 +1,168 @@
+---
+title: "Assignment SQL - R"
+author: "Anil Akyildirim"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+    toc: true
+    toc_depth: 2
+---
+
+## Introduction
+
+In this assignment, we have been asked to do a survey within our family and friends, where they rate six recent popular movies from scale of 1 to 5. The observations would be captured and stored in an SQL database and loaded into an R dataframe.
+
+## About the Survey
+
+The focus of the survey was mainly to capture everyone's ratings. Questions and description of each variable are outlined below;
+
+1- What is your name?
+
+2- From 1 to 5, what do you rate movie (Avengers, Lion King, Joker, Spiderman, Aladdin, Captain_Marvel)?
+
+3- What is your age?
+
+4- What is your gender?
+
+5- What is our relationship?
+
+1- name: Name of the individual
+
+2- rating: From 1 to 5 the rating of the movie provided by the individual.
+
+3- age: age of the individual
+
+4- gender: gender of the individiual.
+
+5- type: relationship between the surveyer and the individual.
+
+6- Addition to the questions since we selected the movies as a drop down option for individuals to select, movie_name: Name of the Movie.
+
+## Creating the MySQL Database
+
+The survey results are collected in a spreadhseet and saved [here](https://raw.githubusercontent.com/anilak1978/movies-survey/master/movie_ratings.csv). Addition to the survey, we can use google to find additional information for the particular movies such as, genre, year made and cost (in millions). This spreadhseet is saved [here](https://raw.githubusercontent.com/anilak1978/movies-survey/master/movie_data_set.csv)
+
+In order to create the database, we have to create an sql instance , create a schema and required tables for further load into the R dataframe. The .sql file can be found [here](https://github.com/anilak1978/movies-survey). In the process we can create multiple tables, filter and merge variables if we want to. 
+
+## Loading the MySQL Database and Tables in R
+
+```{r}
+# installing required packages
+
+install.packages("RMariaDB", repos = "http://cran.us.r-project.org")
+library(RMariaDB)
+
+# setting up database credentials as variables
+
+user_name <- 'root'
+user_password <- "GGanuil1"
+database <- 'movies'
+host_name <- 'localhost'
+
+#connecting to the MySQL database
+
+myDb <- dbConnect(RMariaDB::MariaDB(), user=user_name, password=user_password, dbname=database, host=host_name)
+myDb
+#list of tables
+dbListTables(myDb)
+
+
+```
+
+```{r}
+
+movie_survey <- dbGetQuery(myDb, "select * from movie_ratings")
+head(movie_survey)
+
+```
+
+
+We have successfully created our data frame of the surveys. We can further review it briefly to see if there are any missing values.
+
+```{r}
+# review movie_survey table
+tara_fav_movies <- dbGetQuery(myDb, 'select * from movie_ratings where name="Tara" and rating > 3')
+tara_fav_movies
+
+```
+We can also filter through the table to see findings of the survey. For example; Tara's favorite movies are Joker and Captain Marvel.
+
+```{r}
+
+sum(is.na(movie_survey$rating))
+
+```
+We have 22 missing values. We can replace the NA values with average movie rating.
+
+```{r}
+avg_movie_rating <- mean(movie_survey$rating, na.rm=TRUE)
+avg_movie_rating
+```
+
+If we dont count the NA missing values within the movie ratings, the average rating is 3.6. Since we have defined the rating to be 1 to 5 integer value, we can use the average movie rating is 3.
+
+```{r}
+movie_survey[is.na(movie_survey)] <- 3
+movie_survey
+```
+
+We also have another table we created in the SQL database that provides information about the movies. We can load that into R as a dataframe to review as well.
+
+
+```{r}
+
+movie_info <- dbGetQuery(myDb, "select * from movie_data")
+head(movie_info)
+
+```
+
+We combined the survey observetation input and movie information in our SQL database and we can simply load that in R as a dataframe as well. We can also join them in R as a dataframe too.
+
+```{r}
+
+movie_df <- dbGetQuery(myDb, "SELECT name, type, gender, age, rating, genre, year, cost FROM movie_ratings JOIN movie_data ON movie_ratings.movie_name=movie_data.movie_name")
+
+head(movie_df)
+
+```
+Since we pulled the tables from the SQL server again and merge the tables here, we need to replace the NULL values again here.
+
+```{r}
+
+movie_df[is.na(movie_df)] <- 3
+movie_df
+
+```
+
+We can further look at the distribution on age and correlation between cost and rating. Do movies have to cost more to be better?
+
+```{r}
+
+install.packages('ggplot2', repos = "http://cran.us.r-project.org")
+library('ggplot2')
+
+
+```
+
+
+```{r}
+ggplot(data=movie_df)+
+  geom_point(mapping = aes(x=cost, y=rating))
+
+```
+There is no linear correlation between cost and rating of a movie. 
+
+
+```{r}
+ggplot(data=movie_df)+
+  geom_bar(mapping = aes(x=age))
+
+```
+
+This shows us that , none of my family members or friends ages between 10-35 partricipated in the survey. 
+
+## Conclusion
+
+We have collected movie survey observetaions from selected friends and family members. It is clear that the experiment requires non sample bias data(as it seems there is no response, voluntery response and convinience sample bias in the sampling) to make proper analysis and exploration. 
